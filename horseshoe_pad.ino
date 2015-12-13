@@ -22,6 +22,7 @@ static int timeSetPin = 3;
 static int processPin = 2;
 
 int address = 0;
+int standingPressure = 6;
 
 void setup()
 {
@@ -64,10 +65,10 @@ void loop()
 
     if (digitalRead(timeSetPin) == 1)
     {
-      digitalClockDisplay();
+      //digitalClockDisplay();
     }
   }
-  else if (Bean.getConnectionState() && digitalRead(activatePin) == 1 && digitalRead(gaitRegisterPin) == 0)
+  else if (Bean.getConnectionState() && digitalRead(activatePin) == 1 && digitalRead(gaitRegisterPin) == 0 && digitalRead(processPin) == 0)
   {
     evaluateCommand(getCommand());
 
@@ -76,16 +77,17 @@ void loop()
       digitalClockDisplay();
     }
   }
-  else if (Bean.getConnectionState() && digitalRead(activatePin) == 1 && digitalRead(gaitRegisterPin) == 1)
+  else if (Bean.getConnectionState() && digitalRead(activatePin) == 1 && digitalRead(gaitRegisterPin) == 1 && digitalRead(processPin) == 0)
   {
     evaluateCommand(getCommand());
     setGait();
   }
-  else if (!Bean.getConnectionState() && digitalRead(activatePin) == 1 && digitalRead(processPin) == 1)
+  // CHANGE TO NOT CONNECTED FOR REGULAR(NON-DEBUGGING) USE.
+  else if (Bean.getConnectionState() && digitalRead(activatePin) == 1 && digitalRead(processPin) == 1 && digitalRead(gaitRegisterPin) == 0)
   {
     evaluateCommand("PROCESS");
   }
-  else if (!Bean.getConnectionState() && digitalRead(activatePin) == 0 && digitalRead(gaitRegisterPin) == 0)
+  else if (!Bean.getConnectionState() && digitalRead(activatePin) == 0 && digitalRead(gaitRegisterPin) == 0 && digitalRead(processPin) == 0)
   {
     evaluateCommand("SLEEP");
   }
@@ -126,7 +128,6 @@ void evaluateCommand(String command)
       Bean.sleep(MAX_BEAN_SLEEP);
     }
   }
-  delay(1000);
 }
 
 void activate()
@@ -156,12 +157,22 @@ void setGait()
 {
   Serial.println("-GAIT-" + readScratchString(gaitRegisterBank));
   sendAccelerationData();
-  sendPressureData();
+  Serial.println("P-" + String(analogRead(A1)));
 }
 
 void sendPressureData()
 {
-  Serial.println("P-" + String(analogRead(A1)));
+  if (analogRead(A1) > standingPressure)
+  {
+    Serial.println("P-" + String(analogRead(A1)));
+    return;
+  }
+  else
+  {
+    Serial.println("SLEEPING--");
+    Bean.sleep(1000);
+    sendPressureData();
+  }
 }
 
 void sendAccelerationData()
@@ -179,6 +190,7 @@ void sendAccelerationData()
 void processGaitData()
 {
   Serial.println("--PROCESSING--");
+  sendPressureData();
 }
 
 String getCommand()
@@ -281,3 +293,4 @@ time_t requestSync()
   Serial.write(TIME_REQUEST);
   return 0; // the time will be sent later in response to serial mesg
 }
+

@@ -1,40 +1,40 @@
-#include <PinChangeInt.h> 
+#include <Time.h>
+#include <TimeLib.h>
+#include <Statistics.h>
+#include <EEPROMex.h>
+#include <EEPROMVar.h>
+#include <PinChangeInt.h>
 
 #define MAX_BEAN_SLEEP 0xFFFFFFFF
+#define TIME_HEADER  "T"   // Header tag for serial time sync message
+#define TIME_REQUEST  7    // ASCII bell character requests a time sync message 
 
-bool setNewValue = false;
+const int activateBank = 1;
+const int gaitRegisterBank = 2;
+const int pressureBank = 3;
+const int accelerationBank = 4;
+const int commandBank = 5;
 
-uint16_t previousAccelerationX = 0;
-uint16_t accumulatedAccelerationX = 0;
-uint16_t averageAccelerationX = 0;
+static int d0 = 0;
+static int activatePin = 5;
+static int gaitRegisterPin = 4;
+static int timeSetPin = 3;
+static int processPin = 2;
 
-uint16_t previousAccelerationY = 0;
-uint16_t accumulatedAccelerationY = 0;
-uint16_t averageAccelerationY = 0;
-
-uint16_t previousAccelerationZ = 0;
-uint16_t accumulatedAccelerationZ = 0;
-uint16_t averageAccelerationZ = 0;
-
-uint8_t previousStepPressure = 0;
-uint8_t accumulatedStepPressure = 0;
-uint8_t averageStepPressure = 0;
-uint8_t numberOfSteps = 0;
-
-const int walkBank = 1;
-const int trotBank = 2;
-const int canterBank = 3;
-const int miscBank = 4;
-const int utilityBank = 5;
+int address = 0;
 
 void setup()
 {
   // Initialize serial communication.
   Serial.begin(57600);
 
-  pinMode( 0, INPUT_PULLUP );
+  pinMode(d0, OUTPUT);
+  pinMode(activatePin, INPUT_PULLUP);
+  pinMode(gaitRegisterPin, INPUT_PULLUP);
+  pinMode(timeSetPin, INPUT_PULLUP);
+  pinMode(processPin, INPUT_PULLUP);
 
-  attachPinChangeInterrupt(0, processGaitData, CHANGE);
+  Bean.enableConfigSave(false);
   Bean.enableWakeOnConnect(true);
   Bean.enableAdvertising(true);
 
@@ -47,186 +47,157 @@ void setup()
   Bean.setScratchData(4, buffer, 1);
   Bean.setScratchData(5, buffer, 1);
 
-  Bean.setBeanName("lf");
+  Bean.setBeanName("lf-hard-coded-id");
 
-  pinMode(0, OUTPUT);     // Set D0 as output.
-  digitalWrite(0, LOW);   // Turn it off initially.
+  digitalWrite(d0, LOW);
+  digitalWrite(activatePin, LOW);
+  digitalWrite(gaitRegisterPin, LOW);
+  digitalWrite(timeSetPin, LOW);
+  digitalWrite(processPin, LOW);
 }
 
 void loop()
 {
-  if (Bean.getConnectionState())
+  if (Bean.getConnectionState() && digitalRead(activatePin) == 0 && digitalRead(gaitRegisterPin) == 0)
   {
-    // Bean name is set when pad is initalized by the horse owner.
-    if (!String(Bean.getBeanName()).equals("lf") && !String(Bean.getBeanName()).equals("lr")
-        && !String(Bean.getBeanName()).equals("rf") && !String(Bean.getBeanName()).equals("rr")) {
+    evaluateCommand(getCommand());
 
-      Serial.println("Set leg id");
-    }
-    else
+    if (digitalRead(timeSetPin) == 1)
     {
-      // 1. IF IS AWAKE THEN PROCESS GAIR DATA.
-      if (setNewValue)
-      {
-        processGaitData();
-      }
+      digitalClockDisplay();
     }
   }
-  else
+  else if (Bean.getConnectionState() && digitalRead(activatePin) == 1 && digitalRead(gaitRegisterPin) == 0)
   {
-    // Sleep unless woken.
-    Bean.sleep(MAX_BEAN_SLEEP);
+    evaluateCommand(getCommand());
+
+    if (digitalRead(timeSetPin) == 1)
+    {
+      digitalClockDisplay();
+    }
   }
+  else if (Bean.getConnectionState() && digitalRead(activatePin) == 1 && digitalRead(gaitRegisterPin) == 1)
+  {
+    evaluateCommand(getCommand());
+    setGait();
+  }
+  else if (!Bean.getConnectionState() && digitalRead(activatePin) == 1 && digitalRead(processPin) == 1)
+  {
+    evaluateCommand("PROCESS");
+  }
+  else if (!Bean.getConnectionState() && digitalRead(activatePin) == 0 && digitalRead(gaitRegisterPin) == 0)
+  {
+    evaluateCommand("SLEEP");
+  }
+}
+
+void evaluateCommand(String command)
+{
+  if (((command.length()) > 0) && (command != " "))
+  {
+    if (command == "ACTIVATE")
+    {
+      activate();
+    }
+    else if (command == "READ_TIME")
+    {
+      setClockTime();
+    }
+    else if (command == "DEACTIVATE")
+    {
+
+    }
+    else if (command == "SET_GAIT")
+    {
+      digitalWrite(gaitRegisterPin, HIGH);
+    }
+    else if (command == "STOP_SET_GAIT")
+    {
+      digitalWrite(gaitRegisterPin, LOW);
+      digitalWrite(processPin, HIGH);
+    }
+    else if (command == "PROCESS")
+    {
+      processGaitData();
+    }
+    else if (command == "SLEEP")
+    {
+      Serial.println("SLEEPING--");
+      Bean.sleep(MAX_BEAN_SLEEP);
+    }
+  }
+  delay(1000);
+}
+
+void activate()
+{
+  writeScratchString(activateBank, "lf-hard-coded-id");
+  Serial.println("-NAME WRITTEN-");
+}
+
+void setClockTime()
+{
+  setSyncProvider( requestSync);  //set function to call when sync required
+  Serial.println("Waiting for sync message");
+
+  if (Serial.available()) {
+    processSyncMessage();
+  }
+  if (timeStatus() != timeNotSet) {
+    digitalClockDisplay();
+  }
+
+  digitalWrite(activatePin, HIGH);
+  Serial.println("-TIME SET-");
+  digitalWrite(timeSetPin, HIGH);
+}
+
+void setGait()
+{
+  Serial.println("-GAIT-" + readScratchString(gaitRegisterBank));
+  sendAccelerationData();
+  sendPressureData();
+}
+
+void sendPressureData()
+{
+  Serial.println("P-" + String(analogRead(A1)));
+}
+
+void sendAccelerationData()
+{
+  AccelerationReading acceleration = {0, 0, 0};
+  acceleration = Bean.getAcceleration();
+
+  uint16_t accelerationY = acceleration.yAxis;
+  uint16_t accelerationZ = acceleration.zAxis;
+
+  Serial.println("AY-" + String(accelerationY));
+  Serial.println("AZ-" + String(accelerationZ));
 }
 
 void processGaitData()
 {
-  uint8_t upperThreshold = 150;
-  stepCompleted = false;
-  uint8_t currentStepPressure = 0;
-  uint8_t variationX = 0;
-  uint8_t variationY = 0;
-  uint8_t variationZ = 0;
-  digitalWrite(0, HIGH);
-  AccelerationReading acceleration = {0, 0, 0};
-  acceleration = Bean.getAcceleration();
-  uint16_t accelerationX = acceleration.xAxis;
-  uint16_t accelerationY = acceleration.yAxis;
-  uint16_t accelerationZ = acceleration.zAxis;
- 
-  // Check if has horse is lifting foot.
-  if (accelerationX > upperThreshold || accelerationY > upperThreshold || accelerationZ > upperThreshold) {
-    
-      currentStepPressure = analogRead(A1);
+  Serial.println("--PROCESSING--");
+}
 
-      // IF THE CURRENT STEP PRESSURE IS VERY SIMILAR TO THE HORSES STANDING STEP PRESSURE THEN SLEEP.
-      // WHILE SLEEPING UPDATE THE NUMBER OF SLEEP CYCLES EVERY 2 SECONDS.
-      if(numberOfSteps > 2)
-      {
-        if(currentStepPressure > (standingPressure - 6) || currentStepPressure < (standingPressure - 6))
-        {
-          setNewValue = false;
+String getCommand()
+{
+  ScratchData scratchCommand = Bean.readScratchData(commandBank);
+  String command = "";
 
-          do
-          {
-            Bean.sleep(2000);
-            incrementSleepCycles();
-          } while (!setNewValue);
-        }
-      }
-      
-      // check to make sure not recording the same pressure twice.
-      if (currentStepPressure != previousStepPressure)
-      {
-        // CHECK IF READING IS ZERO.
-        if (previousAccelerationX == 0)
-        {
-          previousAccelerationX = accelerationX;
-          averageAccelerationX = accelerationX;
-        }
-
-        if (previousAccelerationY == 0)
-        {
-          previousAccelerationY = accelerationY;
-          averageAccelerationY = accelerationY;
-        }
-
-        if (previousAccelerationZ == 0)
-        {
-          previousAccelerationZ = accelerationZ;
-          averageAccelerationZ = accelerationZ;
-        }
-        
-        // NOT EQUAL TO ZERO.
-        if (averageAccelerationX != 0)
-        {
-          // calculate the variation between the newly read acceleration rate and the average acceleration rate.
-          variationX = getVariationAccelerationX(accelerationX, averageAccelerationX);
-        }
-
-        if (averageAccelerationY != 0)
-        {
-          // calculate the variation between the newly read acceleration rate and the average acceleration rate.
-          variationY = getVariationAccelerationY(accelerationY, averageAccelerationY);
-        }
-
-        if (averageAccelerationZ != 0)
-        {
-          // calculate the variation between the newly read acceleration rate and the average acceleration rate.
-          variationZ = getVariationAccelerationZ(accelerationZ, averageAccelerationZ);
-        }
-        
-        // CHECK IF SIMILAR TO LAST STEP.--->NEED TO ADD X AND Y AXIS ACCELERATION CHECKS.
-        if (variationZ <= 25)
-        {
-          numberOfSteps++;
-
-          accumulatedStepPressure += currentStepPressure;
-
-          averageStepPressure = accumulatedStepPressure / numberOfSteps;
-
-          Serial.println("Current pressure: " + String(currentStepPressure));
-          Serial.println("Accumulated pressure: " + String(accumulatedStepPressure));
-          Serial.println("Average pressure: " + String(averageStepPressure));
-
-          accumulatedAccelerationZ += accelerationZ;
-          averageAccelerationZ = accumulatedAccelerationZ / numberOfSteps;
-
-          Serial.println("Average accelerationZ: " + String(averageAccelerationZ));
-        }
-        else if (variation > 25)
-        {
-          Serial.println("variation > 25");
-
-          determineStorageBank();
-        }
-      }
-    }
+  for (int i = 0; i < scratchCommand.length; i++)
+  {
+    command += (String) (char) scratchCommand.data[i];
   }
-  else {
-    Bean.sleep(1000);
-  }
-}
+  command.toUpperCase();
 
-void determineStorageBank()
-{
-  uint16_t averageAccelerationBankZ = 0;
-  int averageStepPressureBank = 0;
-  int numberOfStepsBank = 0;
+  // Clear the command so we don't process twice
+  uint8_t buffer[1] = { ' ' };
+  Bean.setScratchData(commandBank, buffer, 1);
+  Serial.println("-COMMAND-" + command);
 
-  updateTotalTime();
-}
-
-int getVariationAccelerationX(uint16_t accelerationX, uint16_t averageAccelerationX)
-{
-  return (abs(accelerationX) - abs(averageAccelerationX));
-}
-
-int getVariationAccelerationY(uint16_t accelerationY, uint16_t averageAccelerationY)
-{
-  return (abs(accelerationY) - abs(averageAccelerationY));
-}
-
-int getVariationAccelerationZ(uint16_t accelerationZ, uint16_t averageAccelerationZ)
-{
-  return (abs(accelerationZ) - abs(averageAccelerationZ));
-}
-
-void incrementSleepCycles()
-{
-  // Updates the number of sleep times.
-  writeScratchString(utilityBank, String(readScratchString(utilityBank).toInt() + 1));
-  Serial.println("NUMBER OF SLEEP CYCLES " + readScratchString(utilityBank));
-  return;
-}
-
-void updateTotalTime()
-{
-  int sleepCycles = String(readScratchString(utilityBank)).toInt();
-  long missedTime = sleepCycles * 1000;
-  Bean.setScratchNumber(utilityBank, Bean.readScratchNumber(utilityBank) + missedTime);
-
-  Serial.println("TOTAL TIME: " + String(Bean.readScratchNumber(utilityBank)));
+  return command;
 }
 
 void writeScratchString(int nBank, String strScratch)
@@ -234,22 +205,22 @@ void writeScratchString(int nBank, String strScratch)
   // Convert the string to a uint8_t array
   uint8_t bufTemp[20];
 
-  for ( int i = 0; i < strScratch.length(); i++ )
+  for (int i = 0; i < strScratch.length(); i++)
   {
     bufTemp[i] = strScratch.charAt(i);
   }
 
   // Write string to scratch bank
-  Bean.setScratchData( (uint8_t) nBank, bufTemp, strScratch.length() );
+  Bean.setScratchData((uint8_t) nBank, bufTemp, strScratch.length());
 
   return;
 }
 
-String readScratchString( int nBank )
+String readScratchString(int nBank)
 {
   // Read the scratch bank
-  ScratchData scratchRead = Bean.readScratchData( (uint8_t) nBank );
-  //clearScratchString( nBank );
+  ScratchData scratchRead = Bean.readScratchData((uint8_t) nBank);
+  clearScratchString(nBank);
 
   // Convert to a String object
   String strScratch = "";
@@ -262,16 +233,51 @@ String readScratchString( int nBank )
   return strScratch;
 }
 
-void startStopAdvertising()
+void clearScratchString(int nBank)
 {
-   setNewValue = true;
+  uint8_t buffer[1] = { ' ' };
+  Bean.setScratchData((uint8_t) nBank, buffer, 1);
+
+  return;
 }
 
-// This function calculates the difference between two acceleration readings
-int getAccelDifference(AccelerationReading readingOne, AccelerationReading readingTwo) {
-  int deltaX = abs(readingTwo.xAxis - readingOne.xAxis);
-  int deltaY = abs(readingTwo.yAxis - readingOne.yAxis);
-  int deltaZ = abs(readingTwo.zAxis - readingOne.zAxis);
-  // Return the magnitude
-  return deltaX + deltaY + deltaZ;
+void digitalClockDisplay() {
+  // digital clock display of the time
+  Serial.print(hour());
+  printDigits(minute());
+  printDigits(second());
+  Serial.print(" ");
+  Serial.print(day());
+  Serial.print(" ");
+  Serial.print(month());
+  Serial.print(" ");
+  Serial.print(year());
+  Serial.println();
+}
+
+void printDigits(int digits) {
+  // utility function for digital clock display: prints preceding colon and leading 0
+  Serial.print(":");
+  if (digits < 10)
+    Serial.print('0');
+  Serial.print(digits);
+}
+
+
+void processSyncMessage() {
+  unsigned long pctime;
+  const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013
+
+  if (Serial.find(TIME_HEADER)) {
+    pctime = Serial.parseInt();
+    if ( pctime >= DEFAULT_TIME) { // check the integer is a valid time (greater than Jan 1 2013)
+      setTime(pctime); // Sync Arduino clock to the time received on the serial port
+    }
+  }
+}
+
+time_t requestSync()
+{
+  Serial.write(TIME_REQUEST);
+  return 0; // the time will be sent later in response to serial mesg
 }

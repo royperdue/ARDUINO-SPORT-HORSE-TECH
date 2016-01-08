@@ -1,4 +1,9 @@
+#include <Arduino.h>
+#include <StringUtil.h>
 #include <Statistics.h>
+
+using namespace StringUtil;
+
 
 Statistics accelerationStatsX(20);
 Statistics accelerationStatsY(20);
@@ -18,6 +23,8 @@ static bool activateFlag = false;
 static bool gaitRegisterFlag = false;
 static bool timeSetFlag = false;
 static int processFlag = false;
+
+int string_width;
 
 void setup()
 {
@@ -57,6 +64,7 @@ void loop()
   } 
   else 
   {
+    digitalWrite(d0, LOW);
     Bean.sleep(0xFFFFFFFF);
   }
 }
@@ -109,6 +117,7 @@ void takeReadings()
   // IF GREATER THAN WHEN HORSE FOOT STILL IN AIR AND NOT TOUCHING GROUND DURING STEP.
   if (force > 30)
   {
+    char buf[256];
     forceStats.addData(force);
 
     Serial.print("AccelerationX mean: ");
@@ -119,17 +128,16 @@ void takeReadings()
     Serial.print(accelerationStatsZ.mean());
     Serial.print("Force mean: ");
     Serial.print(forceStats.mean());
+
+    float xAccelerationMean = accelerationStatsX.mean();
+
+    fprintf(Serial, "float=%f ", 12.123456);
   }
 }
 
-void sendPressureData()
+void sendData()
 {
-  
-}
-
-void sendAccelerationData()
-{
-  
+  //Bean.setScratchData(commandBank, buffer, 1);
 }
 
 String getCommand()

@@ -1,28 +1,23 @@
-#include <Time.h>
-#include <TimeLib.h>
 #include <Statistics.h>
-#include <EEPROMex.h>
-#include <EEPROMVar.h>
-#include <PinChangeInt.h>
+
+Statistics accelerationStatsX(20);
+Statistics accelerationStatsY(20);
+Statistics accelerationStatsZ(20);
+Statistics forceStats(20);
 
 #define MAX_BEAN_SLEEP 0xFFFFFFFF
-#define TIME_HEADER  "T"   // Header tag for serial time sync message
-#define TIME_REQUEST  7    // ASCII bell character requests a time sync message 
 
-const int activateBank = 1;
-const int gaitRegisterBank = 2;
-const int pressureBank = 3;
-const int accelerationBank = 4;
+const int bankForce = 1;
+const int bankAccelerationX = 2;
+const int bankAccelerationY = 3;
+const int bankAccelerationZ = 4;
 const int commandBank = 5;
 
 static int d0 = 0;
-static int activatePin = 5;
-static int gaitRegisterPin = 4;
-static int timeSetPin = 3;
-static int processPin = 2;
-
-int address = 0;
-int standingPressure = 6;
+static bool activateFlag = false;
+static bool gaitRegisterFlag = false;
+static bool timeSetFlag = false;
+static int processFlag = false;
 
 void setup()
 {
@@ -30,10 +25,6 @@ void setup()
   Serial.begin(57600);
 
   pinMode(d0, OUTPUT);
-  pinMode(activatePin, INPUT_PULLUP);
-  pinMode(gaitRegisterPin, INPUT_PULLUP);
-  pinMode(timeSetPin, INPUT_PULLUP);
-  pinMode(processPin, INPUT_PULLUP);
 
   Bean.enableConfigSave(false);
   Bean.enableWakeOnConnect(true);
@@ -42,54 +33,31 @@ void setup()
   uint8_t buffer[1] = {' '};
 
   // Initialize scratch banks with blank space.
-  Bean.setScratchData(1, buffer, 1);
-  Bean.setScratchData(2, buffer, 1);
-  Bean.setScratchData(3, buffer, 1);
-  Bean.setScratchData(4, buffer, 1);
-  Bean.setScratchData(5, buffer, 1);
+  Bean.setScratchData(bankForce, buffer, 1);
+  Bean.setScratchData(bankAccelerationX, buffer, 1);
+  Bean.setScratchData(bankAccelerationY, buffer, 1);
+  Bean.setScratchData(bankAccelerationZ, buffer, 1);
+  Bean.setScratchData(commandBank, buffer, 1);
 
-  Bean.setBeanName("lf-hard-coded-id");
-
+  if (Bean.getBeanName() != "pad-1")
+  {
+    Bean.setBeanName("pad-1");
+    Serial.println("-BEAN-NAME-CHANGED-");
+  }
+  
   digitalWrite(d0, LOW);
-  digitalWrite(activatePin, LOW);
-  digitalWrite(gaitRegisterPin, LOW);
-  digitalWrite(timeSetPin, LOW);
-  digitalWrite(processPin, LOW);
 }
 
 void loop()
 {
-  if (Bean.getConnectionState() && digitalRead(activatePin) == 0 && digitalRead(gaitRegisterPin) == 0)
+  if (Bean.getConnectionState()) 
   {
     evaluateCommand(getCommand());
-
-    if (digitalRead(timeSetPin) == 1)
-    {
-      //digitalClockDisplay();
-    }
-  }
-  else if (Bean.getConnectionState() && digitalRead(activatePin) == 1 && digitalRead(gaitRegisterPin) == 0 && digitalRead(processPin) == 0)
+    delay(500);
+  } 
+  else 
   {
-    evaluateCommand(getCommand());
-
-    if (digitalRead(timeSetPin) == 1)
-    {
-      digitalClockDisplay();
-    }
-  }
-  else if (Bean.getConnectionState() && digitalRead(activatePin) == 1 && digitalRead(gaitRegisterPin) == 1 && digitalRead(processPin) == 0)
-  {
-    evaluateCommand(getCommand());
-    setGait();
-  }
-  // CHANGE TO NOT CONNECTED FOR REGULAR(NON-DEBUGGING) USE.
-  else if (Bean.getConnectionState() && digitalRead(activatePin) == 1 && digitalRead(processPin) == 1 && digitalRead(gaitRegisterPin) == 0)
-  {
-    evaluateCommand("PROCESS");
-  }
-  else if (!Bean.getConnectionState() && digitalRead(activatePin) == 0 && digitalRead(gaitRegisterPin) == 0 && digitalRead(processPin) == 0)
-  {
-    evaluateCommand("SLEEP");
+    Bean.sleep(0xFFFFFFFF);
   }
 }
 
@@ -97,100 +65,71 @@ void evaluateCommand(String command)
 {
   if (((command.length()) > 0) && (command != " "))
   {
-    if (command == "ACTIVATE")
+    if (command == "TAKE_READINGS")
     {
-      activate();
+      digitalWrite(d0, HIGH);
     }
-    else if (command == "READ_TIME")
+    else if (command == "PAUSE_READINGS")
     {
-      setClockTime();
+      digitalWrite(d0, LOW);
     }
-    else if (command == "DEACTIVATE")
+    else if (command == "BANK_DATA")
     {
-
+      
     }
-    else if (command == "SET_GAIT")
+    else if (command == "CHECK_BATTERY")
     {
-      digitalWrite(gaitRegisterPin, HIGH);
+      
     }
-    else if (command == "STOP_SET_GAIT")
-    {
-      digitalWrite(gaitRegisterPin, LOW);
-      digitalWrite(processPin, HIGH);
-    }
-    else if (command == "PROCESS")
-    {
-      processGaitData();
-    }
-    else if (command == "SLEEP")
-    {
-      Serial.println("SLEEPING--");
-      Bean.sleep(MAX_BEAN_SLEEP);
-    }
+  }
+  else if (digitalRead(d0) == HIGH)
+  {
+    takeReadings();
+  }
+  else
+  {
+    Serial.println("-PAUSED-");
   }
 }
 
-void activate()
+void takeReadings()
 {
-  writeScratchString(activateBank, "lf-hard-coded-id");
-  Serial.println("-NAME WRITTEN-");
-}
+  AccelerationReading acceleration = {0, 0, 0};
+  acceleration = Bean.getAcceleration();
+  uint16_t accelerationX = acceleration.xAxis;
+  uint16_t accelerationY = acceleration.yAxis;
+  uint16_t accelerationZ = acceleration.zAxis;
 
-void setClockTime()
-{
-  setSyncProvider( requestSync);  //set function to call when sync required
-  Serial.println("Waiting for sync message");
+  accelerationStatsX.addData(accelerationX);
+  accelerationStatsY.addData(accelerationY);
+  accelerationStatsZ.addData(accelerationZ);
 
-  if (Serial.available()) {
-    processSyncMessage();
+  int force = analogRead(A0);
+
+  // IF GREATER THAN WHEN HORSE FOOT STILL IN AIR AND NOT TOUCHING GROUND DURING STEP.
+  if (force > 30)
+  {
+    forceStats.addData(force);
+
+    Serial.print("AccelerationX mean: ");
+    Serial.print(accelerationStatsX.mean());
+    Serial.print("AccelerationY mean: ");
+    Serial.print(accelerationStatsY.mean());
+    Serial.print("AccelerationZ mean: ");
+    Serial.print(accelerationStatsZ.mean());
+    Serial.print("Force mean: ");
+    Serial.print(forceStats.mean());
   }
-  if (timeStatus() != timeNotSet) {
-    digitalClockDisplay();
-  }
-
-  digitalWrite(activatePin, HIGH);
-  Serial.println("-TIME SET-");
-  digitalWrite(timeSetPin, HIGH);
-}
-
-void setGait()
-{
-  Serial.println("-GAIT-" + readScratchString(gaitRegisterBank));
-  sendAccelerationData();
-  Serial.println("P-" + String(analogRead(A1)));
 }
 
 void sendPressureData()
 {
-  if (analogRead(A1) > standingPressure)
-  {
-    Serial.println("P-" + String(analogRead(A1)));
-    return;
-  }
-  else
-  {
-    Serial.println("SLEEPING--");
-    Bean.sleep(1000);
-    sendPressureData();
-  }
+  
 }
 
 void sendAccelerationData()
 {
-  AccelerationReading acceleration = {0, 0, 0};
-  acceleration = Bean.getAcceleration();
-
-  uint16_t accelerationY = acceleration.yAxis;
-  uint16_t accelerationZ = acceleration.zAxis;
-
-  Serial.println("AY-" + String(accelerationY));
-  Serial.println("AZ-" + String(accelerationZ));
-}
-
-void processGaitData()
-{
-  Serial.println("--PROCESSING--");
-  sendPressureData();
+  
 }
 
 String getCommand()
@@ -251,46 +190,5 @@ void clearScratchString(int nBank)
   Bean.setScratchData((uint8_t) nBank, buffer, 1);
 
   return;
-}
-
-void digitalClockDisplay() {
-  // digital clock display of the time
-  Serial.print(hour());
-  printDigits(minute());
-  printDigits(second());
-  Serial.print(" ");
-  Serial.print(day());
-  Serial.print(" ");
-  Serial.print(month());
-  Serial.print(" ");
-  Serial.print(year());
-  Serial.println();
-}
-
-void printDigits(int digits) {
-  // utility function for digital clock display: prints preceding colon and leading 0
-  Serial.print(":");
-  if (digits < 10)
-    Serial.print('0');
-  Serial.print(digits);
-}
-
-
-void processSyncMessage() {
-  unsigned long pctime;
-  const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013
-
-  if (Serial.find(TIME_HEADER)) {
-    pctime = Serial.parseInt();
-    if ( pctime >= DEFAULT_TIME) { // check the integer is a valid time (greater than Jan 1 2013)
-      setTime(pctime); // Sync Arduino clock to the time received on the serial port
-    }
-  }
-}
-
-time_t requestSync()
-{
-  Serial.write(TIME_REQUEST);
-  return 0; // the time will be sent later in response to serial mesg
 }
 

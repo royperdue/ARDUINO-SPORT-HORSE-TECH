@@ -19,10 +19,6 @@ const int bankAccelerationZ = 4;
 const int commandBank = 5;
 
 static int d0 = 0;
-static bool activateFlag = false;
-static bool gaitRegisterFlag = false;
-static bool timeSetFlag = false;
-static int processFlag = false;
 
 int string_width;
 
@@ -51,18 +47,18 @@ void setup()
     Bean.setBeanName("pad-1");
     Serial.println("-BEAN-NAME-CHANGED-");
   }
-  
+
   digitalWrite(d0, LOW);
 }
 
 void loop()
 {
-  if (Bean.getConnectionState()) 
+  if (Bean.getConnectionState())
   {
     evaluateCommand(getCommand());
     delay(500);
-  } 
-  else 
+  }
+  else
   {
     digitalWrite(d0, LOW);
     Bean.sleep(0xFFFFFFFF);
@@ -75,28 +71,32 @@ void evaluateCommand(String command)
   {
     if (command == "TAKE_READINGS")
     {
+      command = "";
       digitalWrite(d0, HIGH);
     }
     else if (command == "PAUSE_READINGS")
     {
+      command = "";
       digitalWrite(d0, LOW);
     }
     else if (command == "BANK_DATA")
     {
+      command = "";
       sendData();
     }
     else if (command == "CHECK_BATTERY")
     {
-      
+
     }
   }
   else if (digitalRead(d0) == HIGH)
   {
     takeReadings();
   }
-  else
+  else if (digitalRead(d0) == LOW)
   {
     Serial.println("-PAUSED-");
+    Bean.sleep(1000);
   }
 }
 
@@ -107,6 +107,10 @@ void takeReadings()
   uint16_t accelerationX = acceleration.xAxis;
   uint16_t accelerationY = acceleration.yAxis;
   uint16_t accelerationZ = acceleration.zAxis;
+
+  Serial.println("ACCELERATION_X: " + accelerationX);
+  Serial.println("ACCELERATION_Y: " + accelerationY);
+  Serial.println("ACCELERATION_Z: " + accelerationZ);
 
   accelerationStatsX.addData(accelerationX);
   accelerationStatsY.addData(accelerationY);
@@ -123,26 +127,30 @@ void takeReadings()
 
 void sendData()
 {
-    char bufferForce[256];
-    char bufferAccelerationX[256];
-    char bufferAccelerationY[256];
-    char bufferAccelerationZ[256];
+  char bufferForce[256];
+  char bufferAccelerationX[256];
+  char bufferAccelerationY[256];
+  char bufferAccelerationZ[256];
 
-    sprintf(bufferForce, F("%f"), forceStats.mean());
-    writeScratchString(bankForce, bufferForce);
-    forceStats.reset();
+  float forceMean = forceStats.mean();
+  sprintf(bufferForce, F("F%f"), forceMean);
 
-    sprintf(bufferAccelerationX, F("%f"), accelerationStatsX.mean());
-    writeScratchString(bankAccelerationX, bufferAccelerationX);
-    accelerationStatsX.reset();
+  if (writeScratchString(bankForce, bufferForce))
+  {
+    sprintf(bufferAccelerationX, F("X%f"), accelerationStatsX.mean());
 
-    sprintf(bufferAccelerationY, F("%f"), accelerationStatsY.mean());
-    writeScratchString(bankAccelerationY, bufferAccelerationY);
-    accelerationStatsY.reset();
+    if (writeScratchString(bankAccelerationX, bufferAccelerationX))
+    {
+      sprintf(bufferAccelerationY, F("Y%f"), accelerationStatsY.mean());
 
-    sprintf(bufferAccelerationZ, F("%f"), accelerationStatsZ.mean());
-    writeScratchString(bankAccelerationZ, bufferAccelerationZ);
-    accelerationStatsZ.reset();
+      if (writeScratchString(bankAccelerationY, bufferAccelerationY))
+      {
+        sprintf(bufferAccelerationZ, F("Z%f"), accelerationStatsZ.mean());
+        writeScratchString(bankAccelerationZ, bufferAccelerationZ);
+        delay(100);
+      }
+    }
+  }
 }
 
 String getCommand()
@@ -164,7 +172,7 @@ String getCommand()
   return command;
 }
 
-void writeScratchString(int nBank, String strScratch)
+bool writeScratchString(int nBank, String strScratch)
 {
   // Convert the string to a uint8_t array
   uint8_t bufTemp[20];
@@ -176,8 +184,9 @@ void writeScratchString(int nBank, String strScratch)
 
   // Write string to scratch bank
   Bean.setScratchData((uint8_t) nBank, bufTemp, strScratch.length());
+  delay(50);
 
-  return;
+  return true;
 }
 
 String readScratchString(int nBank)

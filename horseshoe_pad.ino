@@ -83,7 +83,7 @@ void evaluateCommand(String command)
     }
     else if (command == "BANK_DATA")
     {
-      
+      sendData();
     }
     else if (command == "CHECK_BATTERY")
     {
@@ -117,27 +117,32 @@ void takeReadings()
   // IF GREATER THAN WHEN HORSE FOOT STILL IN AIR AND NOT TOUCHING GROUND DURING STEP.
   if (force > 30)
   {
-    char buf[256];
     forceStats.addData(force);
-
-    Serial.print("AccelerationX mean: ");
-    Serial.print(accelerationStatsX.mean());
-    Serial.print("AccelerationY mean: ");
-    Serial.print(accelerationStatsY.mean());
-    Serial.print("AccelerationZ mean: ");
-    Serial.print(accelerationStatsZ.mean());
-    Serial.print("Force mean: ");
-    Serial.print(forceStats.mean());
-
-    float xAccelerationMean = accelerationStatsX.mean();
-
-    fprintf(Serial, "float=%f ", 12.123456);
   }
 }
 
 void sendData()
 {
-  //Bean.setScratchData(commandBank, buffer, 1);
+    char bufferForce[256];
+    char bufferAccelerationX[256];
+    char bufferAccelerationY[256];
+    char bufferAccelerationZ[256];
+
+    sprintf(bufferForce, F("%f"), forceStats.mean());
+    writeScratchString(bankForce, bufferForce);
+    forceStats.reset();
+
+    sprintf(bufferAccelerationX, F("%f"), accelerationStatsX.mean());
+    writeScratchString(bankAccelerationX, bufferAccelerationX);
+    accelerationStatsX.reset();
+
+    sprintf(bufferAccelerationY, F("%f"), accelerationStatsY.mean());
+    writeScratchString(bankAccelerationY, bufferAccelerationY);
+    accelerationStatsY.reset();
+
+    sprintf(bufferAccelerationZ, F("%f"), accelerationStatsZ.mean());
+    writeScratchString(bankAccelerationZ, bufferAccelerationZ);
+    accelerationStatsZ.reset();
 }
 
 String getCommand()

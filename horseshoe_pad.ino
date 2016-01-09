@@ -11,6 +11,12 @@ Statistics forceStats(10);
 
 #define MAX_BEAN_SLEEP 0xFFFFFFFF
 
+const int forceBank = 1;
+const int xAccelerationBank = 2;
+const int yAccelerationBank = 3;
+const int zAccelerationBank = 4;
+const int commandBank = 5;
+
 static int d0 = 0;
 
 int string_width;
@@ -29,11 +35,11 @@ void setup()
   uint8_t buffer[1] = {' '};
 
   // Initialize scratch banks with blank space.
-  Bean.setScratchData(1, buffer, 1);
-  Bean.setScratchData(2, buffer, 1);
-  Bean.setScratchData(3, buffer, 1);
-  Bean.setScratchData(4, buffer, 1);
-  Bean.setScratchData(5, buffer, 1);
+  Bean.setScratchData(forceBank, buffer, 1);
+  Bean.setScratchData(xAccelerationBank, buffer, 1);
+  Bean.setScratchData(yAccelerationBank, buffer, 1);
+  Bean.setScratchData(zAccelerationBank, buffer, 1);
+  Bean.setScratchData(commandBank, buffer, 1);
 
   if (Bean.getBeanName() != "pad-1")
   {
@@ -142,7 +148,7 @@ void sendData()
     sprintf(bufferForce, F("F%f"), 0.0);
   }
 
-  if (writeScratchString(2, bufferForce))
+  if (writeScratchString(forceBank, bufferForce))
   {
     if (accelerationStatsX.mean() > 0.0)
     {
@@ -153,7 +159,7 @@ void sendData()
       sprintf(bufferAccelerationX, F("X%f"), 0.0);
     }
 
-    if (writeScratchString(3, bufferAccelerationX))
+    if (writeScratchString(xAccelerationBank, bufferAccelerationX))
     {
       if (accelerationStatsY.mean() > 0.0)
       {
@@ -164,7 +170,7 @@ void sendData()
         sprintf(bufferAccelerationY, F("Y%f"), 0.0);
       }
 
-      if (writeScratchString(4, bufferAccelerationY))
+      if (writeScratchString(yAccelerationBank, bufferAccelerationY))
       {
         if (accelerationStatsZ.mean() > 0.0)
         {
@@ -175,7 +181,10 @@ void sendData()
           sprintf(bufferAccelerationZ, F("Z%f"), 0.0);
         }
 
-        writeScratchString(5, bufferAccelerationZ);
+          if(writeScratchString(zAccelerationBank, bufferAccelerationZ))
+          {
+            writeScratchString(commandBank, Bean.getBeanName());
+          }
       }
     }
   }
@@ -183,7 +192,7 @@ void sendData()
 
 String getCommand()
 {
-  ScratchData scratchCommand = Bean.readScratchData(1);
+  ScratchData scratchCommand = Bean.readScratchData(commandBank);
   String command = "";
 
   for (int i = 0; i < scratchCommand.length; i++)
@@ -194,7 +203,7 @@ String getCommand()
 
   // Clear the command so we don't process twice
   uint8_t buffer[1] = { ' ' };
-  Bean.setScratchData(1, buffer, 1);
+  Bean.setScratchData(commandBank, buffer, 1);
   Serial.println("-COMMAND-" + command);
 
   return command;

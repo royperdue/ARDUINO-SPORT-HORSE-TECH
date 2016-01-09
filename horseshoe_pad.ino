@@ -142,7 +142,7 @@ void sendData()
     sprintf(bufferForce, F("F%f"), 0.0);
   }
 
-  if (writeScratchString(1, bufferForce))
+  if (writeScratchString(2, bufferForce))
   {
     if (accelerationStatsX.mean() > 0.0)
     {
@@ -153,7 +153,7 @@ void sendData()
       sprintf(bufferAccelerationX, F("X%f"), 0.0);
     }
 
-    if (writeScratchString(2, bufferAccelerationX))
+    if (writeScratchString(3, bufferAccelerationX))
     {
       if (accelerationStatsY.mean() > 0.0)
       {
@@ -164,7 +164,7 @@ void sendData()
         sprintf(bufferAccelerationY, F("Y%f"), 0.0);
       }
 
-      if (writeScratchString(3, bufferAccelerationY))
+      if (writeScratchString(4, bufferAccelerationY))
       {
         if (accelerationStatsZ.mean() > 0.0)
         {
@@ -175,7 +175,7 @@ void sendData()
           sprintf(bufferAccelerationZ, F("Z%f"), 0.0);
         }
 
-        writeScratchString(4, bufferAccelerationZ);
+        writeScratchString(5, bufferAccelerationZ);
       }
     }
   }
@@ -183,7 +183,7 @@ void sendData()
 
 String getCommand()
 {
-  ScratchData scratchCommand = Bean.readScratchData(5);
+  ScratchData scratchCommand = Bean.readScratchData(1);
   String command = "";
 
   for (int i = 0; i < scratchCommand.length; i++)
@@ -194,7 +194,7 @@ String getCommand()
 
   // Clear the command so we don't process twice
   uint8_t buffer[1] = { ' ' };
-  Bean.setScratchData(5, buffer, 1);
+  Bean.setScratchData(1, buffer, 1);
   Serial.println("-COMMAND-" + command);
 
   return command;

@@ -4,19 +4,12 @@
 
 using namespace StringUtil;
 
-
-Statistics accelerationStatsX(20);
-Statistics accelerationStatsY(20);
-Statistics accelerationStatsZ(20);
-Statistics forceStats(20);
+Statistics accelerationStatsX(10);
+Statistics accelerationStatsY(10);
+Statistics accelerationStatsZ(10);
+Statistics forceStats(10);
 
 #define MAX_BEAN_SLEEP 0xFFFFFFFF
-
-const int bankForce = 1;
-const int bankAccelerationX = 2;
-const int bankAccelerationY = 3;
-const int bankAccelerationZ = 4;
-const int commandBank = 5;
 
 static int d0 = 0;
 
@@ -36,11 +29,11 @@ void setup()
   uint8_t buffer[1] = {' '};
 
   // Initialize scratch banks with blank space.
-  Bean.setScratchData(bankForce, buffer, 1);
-  Bean.setScratchData(bankAccelerationX, buffer, 1);
-  Bean.setScratchData(bankAccelerationY, buffer, 1);
-  Bean.setScratchData(bankAccelerationZ, buffer, 1);
-  Bean.setScratchData(commandBank, buffer, 1);
+  Bean.setScratchData(1, buffer, 1);
+  Bean.setScratchData(2, buffer, 1);
+  Bean.setScratchData(3, buffer, 1);
+  Bean.setScratchData(4, buffer, 1);
+  Bean.setScratchData(5, buffer, 1);
 
   if (Bean.getBeanName() != "pad-1")
   {
@@ -56,7 +49,7 @@ void loop()
   if (Bean.getConnectionState())
   {
     evaluateCommand(getCommand());
-    delay(500);
+    delay(1000);
   }
   else
   {
@@ -102,21 +95,27 @@ void evaluateCommand(String command)
 
 void takeReadings()
 {
-  AccelerationReading acceleration = {0, 0, 0};
-  acceleration = Bean.getAcceleration();
-  uint16_t accelerationX = acceleration.xAxis;
-  uint16_t accelerationY = acceleration.yAxis;
-  uint16_t accelerationZ = acceleration.zAxis;
+  AccelerationReading  acceleration = Bean.getAcceleration();
+  uint16_t accelerationX = abs(acceleration.xAxis);
+  uint16_t accelerationY = abs(acceleration.yAxis);
+  uint16_t accelerationZ = abs(acceleration.zAxis);
 
-  Serial.println("ACCELERATION_X: " + accelerationX);
-  Serial.println("ACCELERATION_Y: " + accelerationY);
-  Serial.println("ACCELERATION_Z: " + accelerationZ);
+  if (accelerationX > 0)
+  {
+    accelerationStatsX.addData(accelerationX);
+  }
 
-  accelerationStatsX.addData(accelerationX);
-  accelerationStatsY.addData(accelerationY);
-  accelerationStatsZ.addData(accelerationZ);
+  if (accelerationY > 0)
+  {
+    accelerationStatsY.addData(accelerationY);
+  }
 
-  int force = analogRead(A0);
+  if (accelerationZ > 0)
+  {
+    accelerationStatsZ.addData(accelerationZ);
+  }
+
+  uint16_t force = analogRead(A0);
 
   // IF GREATER THAN WHEN HORSE FOOT STILL IN AIR AND NOT TOUCHING GROUND DURING STEP.
   if (force > 30)
@@ -133,21 +132,50 @@ void sendData()
   char bufferAccelerationZ[256];
 
   float forceMean = forceStats.mean();
-  sprintf(bufferForce, F("F%f"), forceMean);
 
-  if (writeScratchString(bankForce, bufferForce))
+  if (forceMean > 0.0)
   {
-    sprintf(bufferAccelerationX, F("X%f"), accelerationStatsX.mean());
+    sprintf(bufferForce, F("F%f"), forceMean);
+  }
+  else
+  {
+    sprintf(bufferForce, F("F%f"), 0.0);
+  }
 
-    if (writeScratchString(bankAccelerationX, bufferAccelerationX))
+  if (writeScratchString(1, bufferForce))
+  {
+    if (accelerationStatsX.mean() > 0.0)
     {
-      sprintf(bufferAccelerationY, F("Y%f"), accelerationStatsY.mean());
+      sprintf(bufferAccelerationX, F("X%f"), accelerationStatsX.mean());
+    }
+    else
+    {
+      sprintf(bufferAccelerationX, F("X%f"), 0.0);
+    }
 
-      if (writeScratchString(bankAccelerationY, bufferAccelerationY))
+    if (writeScratchString(2, bufferAccelerationX))
+    {
+      if (accelerationStatsY.mean() > 0.0)
       {
-        sprintf(bufferAccelerationZ, F("Z%f"), accelerationStatsZ.mean());
-        writeScratchString(bankAccelerationZ, bufferAccelerationZ);
-        delay(100);
+        sprintf(bufferAccelerationY, F("Y%f"), accelerationStatsY.mean());
+      }
+      else
+      {
+        sprintf(bufferAccelerationY, F("Y%f"), 0.0);
+      }
+
+      if (writeScratchString(3, bufferAccelerationY))
+      {
+        if (accelerationStatsZ.mean() > 0.0)
+        {
+          sprintf(bufferAccelerationZ, F("Z%f"), accelerationStatsZ.mean());
+        }
+        else
+        {
+          sprintf(bufferAccelerationZ, F("Z%f"), 0.0);
+        }
+
+        writeScratchString(4, bufferAccelerationZ);
       }
     }
   }
@@ -155,7 +183,7 @@ void sendData()
 
 String getCommand()
 {
-  ScratchData scratchCommand = Bean.readScratchData(commandBank);
+  ScratchData scratchCommand = Bean.readScratchData(5);
   String command = "";
 
   for (int i = 0; i < scratchCommand.length; i++)
@@ -166,7 +194,7 @@ String getCommand()
 
   // Clear the command so we don't process twice
   uint8_t buffer[1] = { ' ' };
-  Bean.setScratchData(commandBank, buffer, 1);
+  Bean.setScratchData(5, buffer, 1);
   Serial.println("-COMMAND-" + command);
 
   return command;
@@ -183,10 +211,10 @@ bool writeScratchString(int nBank, String strScratch)
   }
 
   // Write string to scratch bank
-  Bean.setScratchData((uint8_t) nBank, bufTemp, strScratch.length());
-  delay(50);
+  bool success = Bean.setScratchData((uint8_t)nBank, bufTemp, strScratch.length());
+  delay(100);
 
-  return true;
+  return success;
 }
 
 String readScratchString(int nBank)

@@ -41,9 +41,9 @@ void setup()
   Bean.setScratchData(zAccelerationBank, buffer, 1);
   Bean.setScratchData(commandBank, buffer, 1);
 
-  if (Bean.getBeanName() != "pad-1")
+  if (Bean.getBeanName() != "RF-1")
   {
-    Bean.setBeanName("pad-1");
+    Bean.setBeanName("RF-1");
     Serial.println("-BEAN-NAME-CHANGED-");
   }
 

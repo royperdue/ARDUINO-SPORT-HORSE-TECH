@@ -41,9 +41,11 @@ void setup()
   Bean.setScratchData(zAccelerationBank, buffer, 1);
   Bean.setScratchData(commandBank, buffer, 1);
 
-  if (Bean.getBeanName() != "RF-1")
+  // DURING PRODUCTION THE PAD ID MUST BE HARD CODED HERE AND AGAIN ON LINES 143, 147, 154, 158, 165, 169, 176, & 180.
+  // OR ANOTHER POSSIBILITY IS TO MAKE 3 MORE FILES, ONE FOR LH, LF, RH, & RF.
+  if (Bean.getBeanName() != "RH-1")
   {
-    Bean.setBeanName("RF-1");
+    Bean.setBeanName("RH-1");
     Serial.println("-BEAN-NAME-CHANGED-");
   }
 
@@ -55,6 +57,7 @@ void loop()
   if (Bean.getConnectionState())
   {
     evaluateCommand(getCommand());
+    // THIS DELAY MAY NEED ADJUSTING SO IT COORDINATES WITH THE HORSES FOOT STEPS.
     delay(1000);
   }
   else
@@ -82,10 +85,6 @@ void evaluateCommand(String command)
     {
       command = "";
       sendData();
-    }
-    else if (command == "CHECK_BATTERY")
-    {
-
     }
   }
   else if (digitalRead(d0) == HIGH)
@@ -127,6 +126,7 @@ void takeReadings()
   if (force > 30)
   {
     forceStats.addData(force);
+    writeScratchString(commandBank, "BANK_DATA");
   }
 }
 
@@ -141,50 +141,46 @@ void sendData()
 
   if (forceMean > 0.0)
   {
-    sprintf(bufferForce, F("F%f"), forceMean);
+    sprintf(bufferForce, F("RH-%f"), forceMean);
   }
   else
   {
-    sprintf(bufferForce, F("F%f"), 0.0);
+    sprintf(bufferForce, F("RH-%f"), 0.0);
   }
 
   if (writeScratchString(forceBank, bufferForce))
   {
     if (accelerationStatsX.mean() > 0.0)
     {
-      sprintf(bufferAccelerationX, F("X%f"), accelerationStatsX.mean());
+      sprintf(bufferAccelerationX, F("RH-%f"), accelerationStatsX.mean());
     }
     else
     {
-      sprintf(bufferAccelerationX, F("X%f"), 0.0);
+      sprintf(bufferAccelerationX, F("RH-%f"), 0.0);
     }
 
     if (writeScratchString(xAccelerationBank, bufferAccelerationX))
     {
       if (accelerationStatsY.mean() > 0.0)
       {
-        sprintf(bufferAccelerationY, F("Y%f"), accelerationStatsY.mean());
+        sprintf(bufferAccelerationY, F("RH-%f"), accelerationStatsY.mean());
       }
       else
       {
-        sprintf(bufferAccelerationY, F("Y%f"), 0.0);
+        sprintf(bufferAccelerationY, F("RH-%f"), 0.0);
       }
 
       if (writeScratchString(yAccelerationBank, bufferAccelerationY))
       {
         if (accelerationStatsZ.mean() > 0.0)
         {
-          sprintf(bufferAccelerationZ, F("Z%f"), accelerationStatsZ.mean());
+          sprintf(bufferAccelerationZ, F("RH-%f"), accelerationStatsZ.mean());
         }
         else
         {
-          sprintf(bufferAccelerationZ, F("Z%f"), 0.0);
+          sprintf(bufferAccelerationZ, F("RH-%f"), 0.0);
         }
-
-          if(writeScratchString(zAccelerationBank, bufferAccelerationZ))
-          {
-            writeScratchString(commandBank, Bean.getBeanName());
-          }
+          writeScratchString(zAccelerationBank, bufferAccelerationZ);
       }
     }
   }

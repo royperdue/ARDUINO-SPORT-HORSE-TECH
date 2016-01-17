@@ -58,7 +58,7 @@ void loop()
   {
     evaluateCommand(getCommand());
     // THIS DELAY MAY NEED ADJUSTING SO IT COORDINATES WITH THE HORSES FOOT STEPS.
-    delay(1000);
+    //delay(1000);
   }
   else
   {

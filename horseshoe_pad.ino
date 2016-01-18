@@ -102,7 +102,7 @@ void takeReadings()
 {
   AccelerationReading  acceleration = Bean.getAcceleration();
   uint16_t accelerationX = abs(acceleration.xAxis);
-  uint16_t accelerationY = acceleration.yAxis;
+  uint16_t accelerationY = abs(acceleration.yAxis);
   uint16_t accelerationZ = abs(acceleration.zAxis);
 
   if (accelerationX > 0)
@@ -112,9 +112,9 @@ void takeReadings()
 
   // Negative Y acceleration is in the direction of the horse stepping forward so negative 
   // Y acceleration is added but converted to positive first.
-  if (accelerationY < 0)
+  if (accelerationY > 0)
   {
-    accelerationStatsY.addData(abs(acceleration.yAxis));
+    accelerationStatsY.addData(accelerationY);
   }
 
   if (accelerationZ > 0)

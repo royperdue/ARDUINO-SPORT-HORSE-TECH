@@ -27,10 +27,11 @@ void setup()
   Serial.begin(57600);
 
   pinMode(d0, OUTPUT);
-
+  
   Bean.enableConfigSave(false);
-  Bean.enableWakeOnConnect(true);
+  //Bean.enableWakeOnConnect(false);
   Bean.enableAdvertising(true);
+  Bean.setAdvertisingInterval(1000);
 
   uint8_t buffer[1] = {' '};
 
@@ -57,8 +58,6 @@ void loop()
   if (Bean.getConnectionState())
   {
     evaluateCommand(getCommand());
-    // THIS DELAY MAY NEED ADJUSTING SO IT COORDINATES WITH THE HORSES FOOT STEPS.
-    //delay(1000);
   }
   else
   {

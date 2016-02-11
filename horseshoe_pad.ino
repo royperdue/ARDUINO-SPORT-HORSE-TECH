@@ -93,7 +93,7 @@ void evaluateCommand(String command)
   else if (digitalRead(d0) == LOW)
   {
     Serial.println("-PAUSED-");
-    Bean.sleep(1000);
+    Bean.sleep(0xFFFFFFFF);
   }
 }
 

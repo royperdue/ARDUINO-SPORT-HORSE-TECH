@@ -85,6 +85,11 @@ void evaluateCommand(String command)
       command = "";
       sendData();
     }
+    else if (command == "BATTERY_VOLTAGE")
+    {
+      command = "";
+      Serial.println(String(Bean.getBeanName()) + " Battery Voltage = " +  String(Bean.getBatteryVoltage()));
+    }
   }
   else if (digitalRead(d0) == HIGH)
   {

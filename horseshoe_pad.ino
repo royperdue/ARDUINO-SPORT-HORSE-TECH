@@ -58,6 +58,7 @@ void loop()
   if (Bean.getConnectionState())
   {
     evaluateCommand(getCommand());
+    delay(100);
   }
   else
   {
@@ -129,7 +130,7 @@ void takeReadings()
   uint16_t force = analogRead(A0);
 
   // IF GREATER THAN WHEN HORSE FOOT STILL IN AIR AND NOT TOUCHING GROUND DURING STEP.
-  if (force > 30)
+  if (force > 38)
   {
     forceStats.addData(force);
     writeScratchString(commandBank, "BANK_DATA");
@@ -206,7 +207,7 @@ String getCommand()
   // Clear the command so we don't process twice
   uint8_t buffer[1] = { ' ' };
   Bean.setScratchData(commandBank, buffer, 1);
-  Serial.println("-COMMAND-" + command);
+  //Serial.println("-COMMAND-" + command);
 
   return command;
 }
